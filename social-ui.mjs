@@ -1,0 +1,55 @@
+import { people, skins, petStage, demoDay, areFriends } from './social.mjs';
+import { restaurants } from './catalog.mjs';
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const button = (label, type, id='', target='', disabled=false) => `<button type="button" data-social="${type}" data-id="${esc(id)}" data-target="${esc(target)}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+const names = ids => ids.map(id => people[id]).join('、');
+const badge = text => `<span class="demo-badge">${text}</span>`;
+const options = items => items.map(([value,label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+export function socialToolbar(s) {
+  return `<aside class="role-bar" aria-label="多人互動展示角色切換" title="切換角色模擬朋友操作，資料只存在此瀏覽器"><strong>多人互動展示</strong><label>角色<select id="demo-actor">${Object.entries(people).map(([id,name]) => `<option value="${id}" ${s.actor === id ? 'selected' : ''}>${name}</option>`).join('')}</select></label></aside>`;
+}
+export function petCard(s, id, groupId = '') {
+  const pet = s.pets[id], stage = petStage(pet.xp), skin = skins.find(item => item.id === pet.skin);
+  return `<article class="pet-card skin-${skin.id}"><div class="pet-character"><span>${stage.icon}</span><i>${skin.icon}</i></div><strong>${people[id]}的糰子</strong><p>${stage.name} · ${pet.xp} XP</p>${badge(skin.name)}${groupId && id !== s.actor ? `<div class="pet-play">${button((s.petInteractions ?? []).some(i => i.day === demoDay(s) && [i.actor,i.target].includes(s.actor) && [i.actor,i.target].includes(id)) ? '✓ 今天玩過了' : '一起玩 +5 XP','petPlay',groupId,id,(s.petInteractions ?? []).some(i => i.day === demoDay(s) && [i.actor,i.target].includes(s.actor) && [i.actor,i.target].includes(id)))}</div>` : ''}</article>`;
+}
+function posts(s, groupId) {
+  const entries = s.posts.filter(p => !groupId || p.group === groupId);
+  return entries.length ? entries.slice(0,20).map(p => `<article class="social-post"><span class="avatar">${people[p.actor].slice(0,1)}</span><div><strong>${people[p.actor]}</strong><small>${esc(s.groups.find(g => g.id === p.group)?.name)} · ${p.day}</small><p>${esc(p.text)}</p>${p.growth ? `<span class="post-growth">${petStage(p.growth.after).icon} 寵物 +${p.growth.xp} XP · ${p.growth.after} XP${p.growth.evolved ? " · 已進化！" : ""}${!p.growth.xp ? " · 今日獎勵已領取" : ""}</span>` : ""}</div></article>`).join('') : '<p class="empty-state">餐桌還留著你的位子。分享今天吃了什麼，讓群組熱鬧起來。</p>';
+}
+export function composer(s) {
+  const groups = s.groups.filter(g => g.members.includes(s.actor));
+  const rewarded = s.pets[s.actor].rewardedDays.includes(demoDay(s));
+  return `<section class="social-panel"><div class="section-heading"><h3>今天吃什麼？</h3>${badge(rewarded ? '今日獎勵已領取' : '首篇 +20 XP / +30 金幣')}</div><p class="muted">每日第一篇群組貼文餵養你的寵物，同日再發文不重複領獎。</p>${groups.length ? `<form data-social-form="post"><label>分享至群組<select name="group">${options(groups.map(g => [g.id,g.name]))}</select></label><label>用餐分享<textarea name="text" maxlength="280" required rows="3" placeholder="今天和誰吃了什麼？有哪一道值得推薦？"></textarea></label><button class="primary" type="submit">發布貼文 · 餵養糰子</button></form>` : '<p>先到好友與群組加入一個群組，就能發文養寵物。</p>'}</section>`;
+}
+export function community(s) {
+  const actor = s.actor;
+  return `<p class="eyebrow">BETTER TOGETHER</p><h2 id="view-title">把飯友，變成日常。</h2>${socialToolbar(s)}<section class="social-panel"><h3>好友邀請與探索</h3><p class="muted">送出邀請後，切換對方角色接受，雙方就會成為好友。</p><div class="people-grid">${Object.entries(people).filter(([id]) => id !== actor).map(([id,name]) => {
+    const incoming = s.requests.some(r => r.from === id && r.to === actor);
+    const outgoing = s.requests.some(r => r.from === actor && r.to === id);
+    return `<article class="person"><span class="avatar">${name[0]}</span><strong>${name}</strong>${areFriends(s,actor,id) ? badge('✓ 已是好友') : incoming ? button('接受好友邀請','accept','',id) : button(outgoing ? '等待對方接受' : '＋ 加入好友','request','',id,outgoing)}</article>`;
+  }).join('')}</div></section><div class="section-heading"><h3>發現你的美食小圈圈</h3><span class="muted">公開示範群組</span></div>${s.groups.map(g => `<section class="social-panel"><div class="section-heading"><div><h3>${g.name}</h3><p class="muted">${g.description}</p></div>${g.members.includes(actor) ? badge('✓ 已加入') : button('＋ 加入群組','joinGroup',g.id)}</div><p class="muted">${g.members.length} 位成員 · ${names(g.members)}</p>${g.members.includes(actor) ? `<h3>群組寵物櫥窗</h3><div class="pet-grid">${g.members.map(id => petCard(s,id,g.id)).join('')}</div>${groupChat(s,g)}<h3>群組近況</h3>${posts(s,g.id)}` : '<p class="empty-state">加入群組後，查看成員的寵物與用餐分享。</p>'}</section>`).join('')}`;
+}
+export function gatherings(s) {
+  const joined = s.groups.filter(g => g.members.includes(s.actor));
+  return `<p class="eyebrow">MAKE ROOM AT THE TABLE</p><h2 id="view-title">揪一桌，一起吃。</h2>${socialToolbar(s)}<details class="social-panel" open><summary>＋ 發起聚餐活動</summary><form data-social-form="createEvent"><label>活動名稱<input name="title" required maxlength="60" placeholder="例如：週五下課火鍋局"></label><div class="form-grid"><label>邀約群組<select name="group" required>${options(joined.map(g => [g.id,g.name]))}</select></label><label>餐廳<select name="place">${options([...restaurants.values()].map(p => [p.id,p.name]))}</select></label><label>聚餐時間<input type="datetime-local" name="date" min="${demoDay(s)}T00:00" required></label><label>人數上限（含主辦人）<input type="number" name="capacity" min="2" max="12" value="4" required></label></div><button class="primary" type="submit" ${!joined.length ? 'disabled' : ''}>建立聚餐</button></form></details><div class="section-heading"><h3>餐桌邀約</h3><span class="muted">好友邀請 / 群組自由加入</span></div>${s.events.map(e => {
+    const g = s.groups.find(g => g.id === e.group), member = e.members.includes(s.actor), full = e.members.length >= e.capacity, ended = e.date.slice(0,10) < demoDay(s);
+    const friends = Object.keys(people).filter(id => id !== s.actor && areFriends(s,s.actor,id) && !e.members.includes(id) && !e.invited.includes(id));
+    return `<article class="social-panel event-card"><div class="section-heading">${badge(g.name)}${badge(ended ? '已結束' : full ? '已額滿' : `${e.capacity-e.members.length} 個空位`)}</div><h3>${esc(e.title)}</h3><p>${esc(e.date.replace('T',' · '))} · ${restaurants.get(e.place).name}</p><p class="muted">${people[e.host]} 主辦 · ${e.members.length}/${e.capacity} 人已加入<br>參加：${names(e.members)}${e.invited.length ? '<br>等待回覆：'+names(e.invited) : ''}</p>${e.invited.includes(s.actor) ? '<p class="invitation">✉ 你收到這場聚餐的邀請！</p>' : ''}<div class="action-row">${member ? e.host === s.actor ? badge('你是主辦人') : button('退出聚餐','leaveEvent',e.id) : !g.members.includes(s.actor) ? button('先加入群組','joinGroup',g.id) : button(e.invited.includes(s.actor) ? '接受邀請並加入' : '我要加入','joinEvent',e.id,'',full || ended)}</div>${e.host === s.actor && !ended && !full ? `<div class="invite-area"><strong>主動邀請朋友</strong><div class="action-row">${friends.length ? friends.map(id => button('邀請 '+people[id],'invite',e.id,id)).join('') : '<span class="muted">朋友已參加或已受邀。也可以先新增好友。</span>'}</div><small>邀請後，切換對方角色並加入活動所屬群組，即可回覆。</small></div>` : ''}</article>`;
+  }).join('')}`;
+}
+export function pets(s) {
+  const pet = s.pets[s.actor], stage = petStage(pet.xp), rewarded = pet.rewardedDays.includes(demoDay(s));
+  return `<p class="eyebrow">LITTLE BITES, BIG ADVENTURES</p><h2 id="view-title">你的餐桌小夥伴。</h2>${socialToolbar(s)}<section class="pet-hero"><div>${petCard(s,s.actor)}</div><div><span class="demo-badge">陪你吃飯，也陪你長大</span><h3>${stage.name}</h3><p>不同日期持續發文，讓糰子慢慢進化。</p><progress value="${Math.min(pet.xp,stage.next)}" max="${stage.next}" aria-label="寵物進化進度"></progress><p>${pet.xp >= 140 ? '已達最終型態，繼續累積美食回憶！' : `再 ${stage.next-pet.xp} XP 就能進化`} · <strong>${pet.coins} 示範金幣</strong></p></div></section><div class="evolution-track"><span>🐣 寶寶<br>0 XP</span><span>→</span><span>🐥 探險家<br>60 XP</span><span>→</span><span>🐲 守護神<br>140 XP</span></div><div class="day-control"><span>展示日期 ${demoDay(s)} · ${rewarded ? '今日已餵養' : '等待今日第一篇貼文'}</span>${button('模擬隔天 →','nextDay')}</div>${composer(s)}<div class="section-heading"><h3>糰子造型商店</h3>${badge('虛擬交易 · 不會實際扣款')}</div><p class="muted">用發文獲得的示範金幣購買 Skin；已購買造型可免費重複換裝。</p><div class="skin-grid">${skins.map(skin => `<article class="social-panel skin-item skin-${skin.id}"><div class="skin-icon">${skin.icon}</div><h3>${skin.name}</h3><p>${skin.price} 示範金幣</p>${button(pet.skin === skin.id ? '✓ 穿戴中' : pet.owned.includes(skin.id) ? '換上造型' : pet.coins < skin.price ? '金幣不足' : '購買並穿戴','skin',skin.id,'',pet.skin === skin.id || (!pet.owned.includes(skin.id) && pet.coins < skin.price))}</article>`).join('')}</div><p class="muted">想看朋友的造型？到「好友與群組」查看群組寵物櫥窗。</p>`;
+}
+export function socialFeed(s) { return socialToolbar(s) + composer(s) + posts(s); }
+
+function groupChat(s, group) {
+  const messages = (s.messages ?? []).filter(m => m.group === group.id).slice(-40);
+  const interactions = (s.petInteractions ?? []).filter(i => i.group === group.id).slice(-3);
+  return `<div class="group-chat" data-chat-group="${group.id}"><div class="section-heading"><h3>群組聊天室</h3><span class="muted">簡單聊聊，約好下一餐</span></div><div class="chat-history" role="log" aria-label="${group.name}的群組訊息">${messages.length ? messages.map(m => `<div class="chat-message ${m.actor === s.actor ? 'mine' : ''}"><small>${people[m.actor]} · ${m.day} ${esc(m.time)}</small><p>${esc(m.text)}</p></div>`).join('') : '<p class="empty-state">還沒有人說話，打聲招呼吧！可切換角色模擬朋友回覆。</p>'}</div><form data-social-form="message" class="chat-form"><input type="hidden" name="group" value="${group.id}"><label>傳送訊息<input name="text" maxlength="200" required autocomplete="off" placeholder="今晚要不要一起吃飯？"></label><button type="submit" class="primary">傳送</button></form><div class="pet-reactions">${interactions.map(i => `<p>🐾 ${people[i.actor]}與${people[i.target]}的糰子一起玩耍，雙方 +5 XP！<small>${i.day}</small></p>`).join('')}</div><p class="muted">群組聊天不領發文獎勵；同一對寵物每日可一起玩一次。</p></div>`;
+}
+
+export function growthReceipt(growth) {
+  const before = petStage(growth.before), after = petStage(growth.after);
+  return `<section class="growth-receipt ${growth.evolved ? 'evolved' : ''}" tabindex="-1" aria-label="發文後寵物成長結果"><button class="growth-close" data-dismiss-growth aria-label="關閉成長提示">×</button><p class="eyebrow">POSTED · LITTLE MOMENTS MATTER</p><h3>${growth.evolved ? '恭喜！你的糰子進化了' : growth.xp ? '分享成功，糰子又長大一點！' : '分享成功，糰子收到你的回憶了'}</h3><div class="growth-evolution"><span>${before.icon}<small>${before.name}</small></span><b>→</b><span class="grown-pet">${after.icon}<small>${after.name}</small></span></div><div class="growth-numbers"><strong>+${growth.xp} XP</strong><strong>+${growth.coins} 金幣</strong></div><p>${growth.before} → ${growth.after} XP${growth.after < 140 ? ` · 距下一階段 ${after.next-growth.after} XP` : ' · 已達最終型態'}</p><progress aria-label="發文後進化進度" value="${Math.min(growth.after,after.next)}" max="${after.next}"></progress>${!growth.xp ? '<p class="muted">今天的發文獎勵已領取，明天再分享就能繼續成長。</p>' : ''}<button data-page="pets">看看我的寵物 ↗</button></section>`;
+}

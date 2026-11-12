@@ -1,0 +1,167 @@
+html[data-ui] {
+  --paper: #fff;
+  --ink: #232722;
+  --quiet: #5c655e;
+  --accent: #274f40;
+  --accent-pale: #edf3ef;
+  --border: #e3e8e3;
+  --nav-height: 64px;
+  font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+}
+
+html[data-ui="album"] {
+  --paper: #fdfbf7;
+  --ink: #29261f;
+  --quiet: #635d51;
+  --accent: #775027;
+  --accent-pale: #f4ede2;
+  --border: #e9e2d8;
+}
+
+html[data-ui="friends"] {
+  --paper: #fafcff;
+  --ink: #222b39;
+  --quiet: #536073;
+  --accent: #344b71;
+  --accent-pale: #edf1f8;
+  --border: #e1e7f0;
+}
+
+[data-ui] body { background: var(--accent-pale); }
+[data-ui] .masthead {
+  padding: max(5px, env(safe-area-inset-top)) 18px 5px;
+  background: var(--paper);
+}
+[data-ui] .masthead .wordmark { display: block; margin: 0; line-height: 1; }
+[data-ui] .masthead .wordmark a { display: inline-flex; align-items: center; min-height: 44px; }
+[data-ui] .masthead .brand { font-size: 26px; letter-spacing: -.9px; }
+.preview-options-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--quiet);
+  font-size: 13px;
+  text-underline-offset: 3px;
+}
+[data-ui] main.shell, [data-ui] main.shell:has(.role-bar) {
+  padding-top: 18px;
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 22px);
+}
+[data-ui] #view > .eyebrow { display: none; }
+[data-ui] .bottom-nav {
+  padding: 4px 5px calc(4px + env(safe-area-inset-bottom));
+  border-radius: 0;
+  border-inline: 0;
+  background: var(--paper);
+  backdrop-filter: none;
+  box-shadow: none;
+}
+[data-ui] .bottom-nav button {
+  min-height: 54px;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--quiet);
+}
+[data-ui] .bottom-nav button[aria-current="page"] {
+  background: var(--accent-pale);
+  color: var(--accent);
+  font-weight: 700;
+}
+[data-ui] .bottom-nav .nav-record span {
+  width: 25px;
+  height: 25px;
+  margin: 0;
+  box-shadow: none;
+  font-size: 18px;
+}
+[data-ui] body:has(.role-bar) .notice {
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px);
+}
+html[data-ui]:has(.role-bar) { scroll-padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px); }
+[data-ui] .role-bar {
+  position: static;
+  width: 100%;
+  transform: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: none;
+  background: var(--accent-pale);
+  backdrop-filter: none;
+}
+.preview-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 14px; }
+.preview-heading h2 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
+.preview-heading .text-button { color: var(--accent); font-weight: 650; }
+.preview-content { margin-bottom: 26px; }
+.preview-content .photo-card { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+[data-ui] .photo-card { border: 0; border-radius: 0; background: transparent; margin-bottom: 14px; }
+[data-ui] .photo-card > header { padding: 5px 0 9px; }
+[data-ui] .photo-card .avatar, .preview-group .avatar {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  background: var(--accent-pale);
+  font-size: 15px;
+}
+[data-ui] .photo-frame { border-radius: 6px; background: var(--accent-pale); }
+[data-ui] .photo-body { padding: 9px 0 3px; font-size: 15px; }
+[data-ui] .photo-body .text-button { min-height: 44px; font-size: inherit; font-weight: inherit; }
+[data-ui] .photo-body h3 { margin: 0; font-size: 17px; }
+[data-ui] .photo-body p { margin: 3px 0 5px; }
+[data-ui] .photo-actions { margin-top: 3px; }
+[data-ui] .photo-actions button {
+  flex: 0 1 auto;
+  border-radius: 6px;
+  border-color: var(--border);
+  background: transparent;
+}
+[data-ui] .photo-actions .react.on { background: var(--accent-pale); color: var(--accent); }
+[data-ui] .photo-card .demo-badge { color: var(--quiet); padding: 0; background: transparent; }
+.preview-group { margin-bottom: 24px; }
+.preview-group h3 { margin: 0 0 9px; font-size: 16px; }
+.preview-group header { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.preview-group header .avatar { margin: 0; flex: 0 0 auto; }
+.preview-group header h3 { margin: 0; }
+[data-ui="friends"] .preview-group + .preview-group {
+  padding-top: 17px;
+  border-top: 1px solid var(--border);
+}
+.preview-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+[data-ui="album"] .preview-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.preview-tiles button {
+  display: grid;
+  align-content: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  text-align: left;
+  min-width: 0;
+}
+.preview-tiles button:hover { background: var(--accent-pale); }
+.preview-tiles strong, .preview-tiles small { overflow-wrap: anywhere; }
+.preview-tiles strong { margin-top: 5px; font-size: 14px; line-height: 1.35; }
+.preview-tiles small { color: var(--quiet); line-height: 1.5; }
+[data-ui="album"] .preview-tiles .photo-frame { aspect-ratio: 1; }
+.preview-tools { margin-top: 16px; border-top: 1px solid var(--border); color: var(--quiet); }
+.preview-tools summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+.preview-tools p { margin: 8px 0; font-size: 13px; }
+[data-ui] .invite-strip { padding: 10px 0; background: transparent; border: 0; border-radius: 0; }
+[data-ui] .upload-zone { border-radius: 6px; border: 1px solid var(--border); background: var(--accent-pale); }
+[data-ui] .upload-zone > span { display: none; }
+[data-ui] .privacy-note { background: transparent; padding-inline: 0; }
+[data-ui] .draft-card, [data-ui] .publish-bar { border-radius: 6px; box-shadow: none; }
+[data-ui] .publish-bar { background: var(--paper); backdrop-filter: none; }
+[data-ui] .photo-pin:has(img) { rotate: 0deg; border-radius: 6px; box-shadow: 0 1px 4px #0003; }
+[data-ui] .photo-pin img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+[data-ui] .photo-pin:has(img) b { rotate: 0deg; }
+[data-ui] .photo-pin.active { outline: 2px solid var(--accent); }
+
+@media (max-width: 350px) {
+  [data-ui="album"] .preview-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui] { scroll-behavior: auto; }
+  [data-ui] *, [data-ui] *::before, [data-ui] *::after { animation-duration: .01ms; transition-duration: .01ms; }
+}

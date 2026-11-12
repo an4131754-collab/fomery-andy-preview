@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fomery 介面比較</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f5f5f2;
+      color: #20241f;
+      font: 1rem/1.5 system-ui, sans-serif;
+    }
+    main { max-width: 96rem; margin: auto; padding: 1.5rem; }
+    header { margin-bottom: 1.25rem; }
+    h1 { margin: 0 0 .25rem; font-size: 1.5rem; }
+    h2 { margin: 0; font-size: 1.125rem; }
+    p { margin: 0; color: #50564d; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+    .option-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .option-heading a { display: inline-flex; align-items: center; min-height: 44px; color: #315743; font-size: .875rem; white-space: nowrap; }
+    section p { margin-bottom: .75rem; font-size: .875rem; }
+    iframe {
+      display: block;
+      width: 100%;
+      height: clamp(28rem, calc(100dvh - 13rem), 50rem);
+      border: 1px solid #d4d9d0;
+      border-radius: .5rem;
+      background: #fff;
+    }
+    .picker { display: none; }
+    :focus-visible { outline: 2px solid #315743; outline-offset: 3px; }
+    @media (max-width: 64rem) {
+      main { max-width: 38rem; padding: .875rem; }
+      header { margin-bottom: .75rem; }
+      .picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .25rem; margin: 0 0 .375rem; padding: 0; border: 0; min-width: 0; }
+      .picker legend, .picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      .picker label {
+        display: grid;
+        min-height: 44px;
+        place-items: center;
+        border: 1px solid #c6cdc3;
+        border-radius: .375rem;
+        font-size: .875rem;
+        cursor: pointer;
+      }
+      .picker input:checked + label { background: #283c31; color: #fff; border-color: #283c31; }
+      .picker input:focus-visible + label { outline: 2px solid #315743; outline-offset: 2px; }
+      .options { display: block; }
+      .option { display: none; }
+      main:has(#choose-feed:checked) #option-feed,
+      main:has(#choose-album:checked) #option-album,
+      main:has(#choose-friends:checked) #option-friends { display: block; }
+      iframe { height: max(26rem, calc(100dvh - 12.25rem)); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Fomery 介面比較</h1>
+      <p>試著看一張朋友的照片，再記錄自己的一餐。</p>
+    </header>
+    <fieldset class="picker">
+      <legend>選擇預覽</legend>
+      <input id="choose-feed" type="radio" name="option" checked><label for="choose-feed">A 朋友近況</label>
+      <input id="choose-album" type="radio" name="option"><label for="choose-album">B 每週相簿</label>
+      <input id="choose-friends" type="radio" name="option"><label for="choose-friends">C 飯友餐桌</label>
+    </fieldset>
+    <div class="options">
+      <section class="option" id="option-feed" aria-labelledby="feed-title">
+        <div class="option-heading">
+          <h2 id="feed-title">A 朋友近況</h2>
+          <a href="./?ui=feed" target="_blank" rel="noopener" aria-label="在新分頁開啟 A 朋友近況">單獨開啟 ↗</a>
+        </div>
+        <p>用大照片往下看朋友最近吃了什麼。</p>
+        <iframe src="./?ui=feed" title="A 朋友近況預覽" loading="lazy"></iframe>
+      </section>
+      <section class="option" id="option-album" aria-labelledby="album-title">
+        <div class="option-heading">
+          <h2 id="album-title">B 每週相簿</h2>
+          <a href="./?ui=album" target="_blank" rel="noopener" aria-label="在新分頁開啟 B 每週相簿">單獨開啟 ↗</a>
+        </div>
+        <p>按週翻看自己和朋友拍下的每一餐。</p>
+        <iframe src="./?ui=album" title="B 每週相簿預覽" loading="lazy"></iframe>
+      </section>
+      <section class="option" id="option-friends" aria-labelledby="friends-title">
+        <div class="option-heading">
+          <h2 id="friends-title">C 飯友餐桌</h2>
+          <a href="./?ui=friends" target="_blank" rel="noopener" aria-label="在新分頁開啟 C 飯友餐桌">單獨開啟 ↗</a>
+        </div>
+        <p>按飯友整理照片，方便找某個人吃過的餐點。</p>
+        <iframe src="./?ui=friends" title="C 飯友餐桌預覽" loading="lazy"></iframe>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

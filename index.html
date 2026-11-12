@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant" data-ui="feed">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fomery · 美食社群與寵物</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ui-preview.css">
+  <link rel="stylesheet" href="record.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header class="shell masthead">
+    <h1 class="wordmark"><a class="brand" href="./" aria-label="Fomery 首頁">Fomery</a></h1>
+    <nav class="bottom-nav" aria-label="主要頁面">
+      <button type="button" data-page="activity"><span aria-hidden="true">⌂</span> 動態</button>
+      <button type="button" data-page="map"><span aria-hidden="true">◎</span> 照片地圖</button>
+      <button type="button" class="nav-record" data-page="record"><span aria-hidden="true">＋</span> 記錄</button>
+      <button type="button" data-page="review"><span aria-hidden="true">◷</span> 回顧</button>
+      <button type="button" data-page="profile"><span aria-hidden="true">◉</span> 我的</button>
+    </nav>
+    <a href="ui-options.html" class="preview-options-link" target="_top" hidden>比較方案</a>
+  </header>
+  <main class="shell" id="main">
+    <section id="view" aria-labelledby="view-title"></section>
+  </main>
+  <p id="status" class="notice" role="status"></p>
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <form id="rating-form">
+      <header class="modal-title">
+        <div><h2 id="dialog-title"></h2><p id="dialog-meta" class="muted"></p></div>
+        <button type="button" data-close aria-label="關閉評價">×</button>
+      </header>
+      <p class="category-strip">加入我的清單 <span>餐廳</span></p>
+      <section id="details-form">
+        <fieldset>
+          <legend>這次吃得怎麼樣？</legend>
+          <div class="choices">
+            <label class="mood-liked"><input type="radio" name="mood" value="liked" required><span class="mood-circle" aria-hidden="true"></span> 喜歡</label>
+            <label class="mood-fine"><input type="radio" name="mood" value="fine" required><span class="mood-circle" aria-hidden="true"></span> 普通</label>
+            <label class="mood-disliked"><input type="radio" name="mood" value="disliked" required><span class="mood-circle" aria-hidden="true"></span> 不喜歡</label>
+          </div>
+        </fieldset>
+        <details id="extras" hidden>
+          <summary>加上這餐的細節 <span>選填</span></summary>
+          <details class="entry-field"><summary>同行者<span aria-hidden="true">＋</span></summary><label>同行者 <input name="companions" maxlength="80" placeholder="這次和誰一起吃？"></label></details>
+          <details class="entry-field"><summary>加上標籤<span aria-hidden="true">＋</span></summary><label>標籤 <input name="tags" maxlength="120" placeholder="例如 早午餐、約會"></label></details>
+          <details class="entry-field"><summary>寫下筆記<span aria-hidden="true">＋</span></summary><label>筆記 <textarea name="note" maxlength="280" rows="3" placeholder="記下想再來的理由…"></textarea></label></details>
+          <details class="entry-field"><summary>喜歡的菜<span aria-hidden="true">＋</span></summary><label>喜歡的菜 <input name="dish" maxlength="80" placeholder="下次還想點什麼？"></label></details>
+          <details class="entry-field"><summary>加入照片<span aria-hidden="true">＋</span></summary><label>照片 <input name="photo" type="file" accept="image/*"></label></details>
+          <details class="entry-field"><summary>用餐日期<span aria-hidden="true">＋</span></summary><label>用餐日期 <input name="date" type="date"></label></details>
+          <label class="privacy-option"><span>隱藏這次動態<small>仍保留在你的個人清單</small></span><input name="hiddenFromActivity" type="checkbox" aria-label="在動態隱藏這次紀錄"></label>
+        </details>
+        <button type="submit" class="primary" disabled>確認評價</button>
+      </section>
+      <section id="comparison" hidden aria-labelledby="compare-title">
+        <div id="comparison-mood" class="comparison-mood"></div>
+        <h3 id="compare-title" tabindex="-1">你比較喜歡哪一家？</h3>
+        <div class="pair"></div>
+        <details class="comparison-info"><summary>查看餐廳資訊</summary><div id="comparison-info"></div></details>
+        <div class="compare-actions">
+          <button type="button" data-choice="undo">上一步</button>
+          <button type="button" data-choice="tie">一樣喜歡</button>
+          <button type="button" data-choice="skip">換一家比較</button>
+        </div>
+      </section>
+      <p id="dialog-error" role="alert"></p>
+    </form>
+  </dialog>
+</body>
+</html>
