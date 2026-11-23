@@ -1,12 +1,17 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <title>Fomery · 餐桌筆記</title>
-  <link rel="stylesheet" href="journal.css">
-  <script type="module" src="journal.mjs?v=meal-journal-2"></script>
+  <script>
+    try {
+      if (localStorage.getItem('fomery-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="journal.css?v=appearance-1">
+  <script type="module" src="journal.mjs?v=appearance-1"></script>
 </head>
 <body>
   <header class="shell masthead">

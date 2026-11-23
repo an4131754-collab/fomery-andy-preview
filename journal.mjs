@@ -86,7 +86,13 @@ function profilePage() {
   });
   const weekdays = [...'一二三四五六日'].map(day => '<span class="day-label">' + day + '</span>').join('');
   const account = diner ? '<p class="muted">' + escape(diner.nickname) + '</p>' : '';
-  return title('個人', diner ? '<button type="button" data-refresh>更新</button>' : '') + account
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const appearance = `<div class="appearance-switch" role="group" aria-label="外觀">
+    <button type="button" data-theme="light" aria-pressed="${!dark}">淺色</button>
+    <button type="button" data-theme="dark" aria-pressed="${dark}">深色</button>
+  </div>`;
+  const refreshButton = diner ? '<button type="button" data-refresh>更新</button>' : '';
+  return title('個人', '<div class="profile-actions">' + appearance + refreshButton + '</div>') + account
     + '<section class="month" aria-label="用餐月曆"><header class="month-header">'
     + '<button type="button" data-month="-1" aria-label="上個月">‹</button><h3>' + month.replace('-', ' 年 ') + ' 月</h3>'
     + '<button type="button" data-month="1" aria-label="下個月">›</button></header>'
@@ -286,7 +292,13 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
   const data = button.dataset;
-  if (pages.includes(data.page)) {
+  if (data.theme === 'light' || data.theme === 'dark') {
+    document.documentElement.dataset.theme = data.theme;
+    try { localStorage.setItem('fomery-theme', data.theme); } catch {}
+    for (const option of button.parentElement.querySelectorAll('button[data-theme]')) {
+      option.setAttribute('aria-pressed', String(option.dataset.theme === data.theme));
+    }
+  } else if (pages.includes(data.page)) {
     page = data.page;
     notice();
     render(true);
