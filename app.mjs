@@ -4,7 +4,7 @@ import { createSocialState, transition, people, petStage, skins } from './social
 import { community, gatherings, pets, growthReceipt, socialToolbar, petCard } from './social-ui.mjs';
 import { beginRanking, compare, finishRanking, moods, opponent, progress, score } from './ranking.mjs';
 import { readExif, nearbyPlaces, placeCoords, photoTransition, photoTypes, seedPhotos, localStamp, visiblePhotos, petMemories } from './photos.mjs';
-import { food, recordPage, recordProgress, reviewPage, photoMapPage, hasFriends, photoSource } from './photo-ui.mjs';
+import { food, recordPage, recordFooter, reviewPage, photoMapPage, hasFriends, photoSource } from './photo-ui.mjs';
 import { journalActivity } from './ui-preview.mjs';
 
 const requestedUi = new URLSearchParams(location.search).get('ui');
@@ -289,6 +289,12 @@ function focusDraftField(index, field) {
   return input;
 }
 
+function refreshRecordFooter() {
+  const { progress, label } = recordFooter(drafts);
+  view.querySelector('[data-record-progress]').textContent = progress;
+  view.querySelector('[data-record-publish]').textContent = label;
+}
+
 async function cropPhoto(file) {
   if (!file.type.startsWith('image/')) throw new Error('Unsupported image');
   const image = await createImageBitmap(file);
@@ -564,7 +570,7 @@ document.addEventListener('input', event => {
       d[field] = event.target.value;
       if (field === 'takenAt') {
         event.target.removeAttribute('aria-invalid');
-        view.querySelector('[data-record-progress]').textContent = recordProgress(drafts);
+        refreshRecordFooter();
       }
     }
     return;
@@ -607,7 +613,10 @@ document.addEventListener('change', event => {
     if (!d) return;
     if (withId) d.with = event.target.checked ? [...d.with, withId] : d.with.filter(id => id !== withId);
     else if (field === 'place') d.place = event.target.value;
-    else if (field === 'audience') d.audience = event.target.value;
+    else if (field === 'audience') {
+      d.audience = event.target.value;
+      refreshRecordFooter();
+    }
     else if (field === 'petOn') d.petOn = event.target.checked;
     else return;
     if (field === 'place' || field === 'petOn') {

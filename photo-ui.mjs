@@ -74,11 +74,18 @@ export function hasFriends(s) {
 }
 
 // ---------- Record ----------
-export function recordProgress(drafts) {
+export function recordFooter(drafts) {
   const missingPlace = drafts.filter(draft => !restaurants.has(draft.place)).length;
   const missingTime = drafts.filter(draft => !Number.isFinite(Date.parse(draft.takenAt))).length;
   const remaining = [missingPlace && `尚有 ${missingPlace} 張未選店家`, missingTime && `${missingTime} 張待確認時間`].filter(Boolean);
-  return remaining.join(' · ') || `${drafts.length} 張照片可發布`;
+  const count = drafts.length;
+  const shared = drafts.filter(draft => draft.audience === 'friends').length;
+  const mixed = shared > 0 && shared < count;
+  const ready = mixed ? `${shared} 張給好友 · ${count - shared} 張只有我` : `${count} 張照片可${shared ? '發布' : '儲存'}`;
+  return {
+    progress: remaining.join(' · ') || ready,
+    label: `${mixed ? '確認' : shared ? '發布' : '儲存'} ${count} 張`,
+  };
 }
 
 export function recordPage(s, drafts, { importing = false, message = '' } = {}) {
@@ -122,6 +129,7 @@ export function recordPage(s, drafts, { importing = false, message = '' } = {}) 
   };
   const full = drafts.length >= 6;
   const pickerLabel = full ? '已選滿 6 張' : drafts.length ? '新增照片' : '從相簿選照片';
+  const footer = recordFooter(drafts);
   return `<div class="record-page">
     <h2 id="view-title">記下這一餐</h2>
     <div class="record-controls">
@@ -133,7 +141,7 @@ export function recordPage(s, drafts, { importing = false, message = '' } = {}) 
     <p class="record-message" role="status" data-record-message>${esc(importing ? '正在讀取照片…' : message)}</p>`
     + drafts.map(card).join('')
     + (drafts.length
-      ? `<div class="publish-bar"><span id="record-progress" role="status" data-record-progress>${recordProgress(drafts)}</span><button type="button" class="primary" data-record-publish aria-describedby="record-progress"${importing ? ' disabled' : ''}>發布 ${drafts.length} 張</button></div>`
+      ? `<div class="publish-bar"><span id="record-progress" role="status" data-record-progress>${footer.progress}</span><button type="button" class="primary" data-record-publish aria-describedby="record-progress"${importing ? ' disabled' : ''}>${footer.label}</button></div>`
       : '<button type="button" class="record-rating text-button" data-page="search">找店評價</button>')
     + '</div>';
 }

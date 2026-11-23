@@ -3,6 +3,6 @@
 GitHub Pages 預覽，來源為 [Bigpig8787/beli-flow-reconstruction 的 andy-develop](https://github.com/Bigpig8787/beli-flow-reconstruction/tree/andy-develop)。
 
 來源提交：
-7116bc63a27786446ae14c7431d4dbe2ad6f141e
+21c9b214a770ca47ca3da77621ad57e9bc0c1318
 
-圓弧導覽樣式同步自 `13431a611aca7c1783a4d96b805ba95226b02f30`。
+此版使用餐照示範資料。設定 Supabase 後才能使用 Google 登入與跨裝置同步。
