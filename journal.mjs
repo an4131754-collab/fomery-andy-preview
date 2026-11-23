@@ -28,7 +28,7 @@ const url = new URL(location.href);
 const invite = url.searchParams.get('invite') || sessionStorage.getItem('fomery-invite');
 const entry = friendCode.test(invite || '') ? invite : '';
 if (entry) sessionStorage.setItem('fomery-invite', entry);
-const base = new URL(url.pathname, url.origin);
+const base = new URL('./', url);
 let searchCode = entry;
 let page = entry ? 'friends' : 'feed';
 
@@ -450,3 +450,4 @@ if (/^https:\/\/[a-z0-9]+\.supabase\.co\/?$/.test(config.url) && /^sb_publishabl
   }, '目前無法連線登入服務，請稍後再試。');
 }
 render();
+if (url.searchParams.has('error')) notice('Google 登入未完成，請再試一次。', true);
