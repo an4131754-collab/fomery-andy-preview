@@ -1,5 +1,6 @@
-import { googleExploreEmbedUrl, mapSearchLinks } from './maps.mjs';
-import { groupMeals, localDate, monthDates, sampleMeals, shiftDay } from './journal-data.mjs';
+import { findPlaces, googleExploreEmbedUrl, mapSearchLinks, suggestPlaces } from './maps.mjs?v=record-2';
+import { groupMeals, localDate, mealDateFromPhotos, mealPhotoLimit, monthDates, sampleMeals, shiftDay } from './journal-data.mjs?v=record-2';
+import { mealCard, preparePhoto, sharePhoto } from './journal-media.mjs?v=record-2';
 import { qrcode } from './vendor/qrcode.mjs';
 
 const view = document.querySelector('#view');
@@ -7,11 +8,17 @@ const status = document.querySelector('#status');
 const login = document.querySelector('#login');
 const detail = document.querySelector('#meal-detail');
 const detailBody = document.querySelector('#detail-body');
+const photoSheet = document.querySelector('#photo-sheet');
+const pickerPhotos = photoSheet.querySelector('[data-picker-photos]');
+const pickerEmpty = photoSheet.querySelector('.photo-sheet-empty');
+const pickerNext = photoSheet.querySelector('[data-finish-photos]');
+const pickerStatus = photoSheet.querySelector('[data-picker-status]');
 const pages = ['feed', 'friends', 'record', 'explore', 'profile'];
 const friendCode = /^[a-f0-9]{12}$/;
-const photoLimit = 350000;
+const coverFields = 'id,owner,restaurant,caption,eaten_on,eaten_time,created_at,photo,place_id';
 const sample = sampleMeals();
 const config = await fetch('./journal-config.json', { cache: 'no-store' }).then(response => response.json()).catch(() => ({}));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let client;
 let session;
 let diner;
@@ -22,6 +29,8 @@ let found;
 let saving = false;
 let updating = 0;
 let authenticating = 0;
+let suggestionTimer;
+let suggesting = 0;
 let draft = {};
 let month = localDate().slice(0, 7);
 const url = new URL(location.href);
@@ -31,6 +40,8 @@ if (entry) sessionStorage.setItem('fomery-invite', entry);
 const base = new URL('./', url);
 let searchCode = entry;
 let page = entry ? 'friends' : 'feed';
+let recordReturn = page;
+let editingPhotos = false;
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -62,8 +73,11 @@ function tile(meal) {
 
 function feedPage() {
   const meals = diner ? feed : sample.filter(meal => meal.owner !== '你');
-  const rows = [...groupMeals(meals, 'owner', 2)].map(([owner, items]) =>
-    '<section class="friend-row"><h3>' + escape(nameFor(owner)) + '</h3><div class="tile-grid">' + items.map(tile).join('') + '</div></section>');
+  const rows = [...groupMeals(meals, 'owner')].map(([owner, items]) => {
+    const row = escape(nameFor(owner));
+    const arrows = items.length > 2 ? '<div class="feed-arrows"><button type="button" data-shift-row="-1" aria-label="較新的餐" disabled>‹</button><button type="button" data-shift-row="1" aria-label="較早的餐">›</button></div>' : '';
+    return `<section class="friend-row" aria-label="${row} 的近況"><header><h3>${row}</h3>${arrows}</header><div class="tile-grid">${items.map(tile).join('')}</div></section>`;
+  });
   const action = diner ? '<button type="button" data-refresh>更新</button>' : '<small>示範餐照</small>';
   return title('朋友近況', action) + (rows.length ? rows.join('') : '<p>好友最近七天還沒有貼文。</p><button type="button" data-page="friends">去加好友</button>');
 }
@@ -143,25 +157,75 @@ function friendsPage() {
     + '<div class="panel"><h3>我的好友</h3>' + (accepted.length ? accepted.map(person).join('') : '<p class="muted">還沒有好友。</p>') + '</div>';
 }
 
+function pickerTiles() {
+  const photos = draft.photos || [];
+  return photos.map((item, index) => `<figure class="draft-tile">
+    <button type="button" class="cover-choice" data-pick-cover="${index}" aria-label="第 ${index + 1} 張照片設為首圖" aria-pressed="${index === 0}"><img src="${item.src}" alt=""></button>
+    <button type="button" class="drop-photo" data-drop-photo="${index}" aria-label="移除第 ${index + 1} 張照片">×</button>
+    ${index === 0 ? '<figcaption>首圖</figcaption>' : ''}
+    ${item.original ? `<button type="button" class="save-photo" data-save-photo="${index}">儲存原圖</button>` : ''}
+  </figure>`).join('');
+}
+
+function recordPhotoSummary() {
+  const photos = draft.photos || [];
+  const hint = dateHint();
+  return `<button type="button" class="record-photo-summary" data-edit-photos>
+    ${photos.length ? `<span class="record-photo-thumbs">${photos.slice(0, 3).map(item => `<img src="${item.src}" alt="">`).join('')}</span>` : ''}
+    <span><strong>${photos.length ? '編輯照片' : '新增照片'}</strong>${hint ? `<small>${escape(hint)}</small>` : ''}</span>
+  </button>`;
+}
+
+function dateHint() {
+  const date = mealDateFromPhotos(draft.photos);
+  if (!date) return '';
+  const time = date.day.replaceAll('-', '/') + ' ' + date.time.slice(0, 5);
+  const source = { photo: '首圖拍攝時間', file: '首圖檔案時間', added: '加入首圖的時間' }[date.source];
+  return `${source} · ${time}`;
+}
+
+function selectedPlace() {
+  const place = draft.place;
+  return place ? `<div class="chosen-place">
+    <strong>${escape(place.displayName)}</strong>
+    <button type="button" data-clear-place aria-label="清除連結店家">×</button>
+    <span class="map-attribution" translate="no">Google Maps</span>
+  </div>` : '';
+}
+
 function recordPage() {
-  const preview = draft.photo ? '<img class="draft-photo" src="' + draft.photo + '" alt="待發布的餐照">' : '';
-  const date = draft.eaten_on || localDate();
-  return title('記錄一餐') + '<form class="fields" data-record>'
-    + '<div class="record-picture"><label>餐照<input type="file" accept="image/*" name="photo"></label>'
-    + '<label>直接拍照<input type="file" accept="image/*" capture="environment" name="camera"></label></div>'
-    + '<div data-preview>' + preview + '</div>'
-    + '<label>用餐店家<input name="restaurant" maxlength="100" required placeholder="輸入店名" value="' + escape(draft.restaurant) + '"></label>'
-    + '<label>心得（選填）<textarea name="caption" rows="3" maxlength="280" placeholder="這餐吃起來怎樣？當時是什麼心情？">' + escape(draft.caption) + '</textarea></label>'
-    + '<label>用餐日期<input type="date" name="eaten_on" max="' + localDate() + '" required value="' + date + '"></label>'
-    + '<div class="controls"><button type="submit" class="primary"' + (diner ? '' : ' disabled') + '>發布給好友</button>'
-    + (diner ? '' : '<small>登入後可發布餐照。</small>') + '</div></form>';
+  return title('記錄一餐', '<button type="button" data-close-record aria-label="關閉記錄">×</button>') + `<form class="fields" data-record ${saving ? 'inert' : ''}>
+    <div data-record-photos>${recordPhotoSummary()}</div>
+    <div class="restaurant-field">
+      <label>用餐店家<input name="restaurant" maxlength="100" autocomplete="off" required placeholder="輸入店名" value="${escape(draft.restaurant)}"></label>
+      <div data-restaurant-suggestions hidden></div>
+      <span class="visually-hidden" data-restaurant-status role="status"></span>
+      <div data-chosen-place ${draft.place ? '' : 'hidden'}>${selectedPlace()}</div>
+    </div>
+    <label class="record-notes">心得<textarea name="caption" rows="3" maxlength="280" placeholder="這餐怎麼樣？">${escape(draft.caption)}</textarea></label>
+    <div class="controls"><button type="submit" class="primary" ${diner && draft.photos?.length && !draft.reading ? '' : 'disabled'}>${diner ? '發布給好友' : '登入後發布'}</button></div></form>`;
 }
 
 function explorePage() {
   return title('探索')
     + '<form class="fields" data-explore><label>找店<input name="query" required maxlength="180" placeholder="輸入店名、地址或地區"></label>'
-    + '<div><button type="submit" class="primary">在 Google 地圖找店 ↗</button></div></form>'
+    + '<div><button type="submit" class="primary">' + (config.mapsKey ? '找店' : '在 Google 地圖找店 ↗') + '</button></div>'
+    + '<div data-place-results hidden></div></form>'
     + '<iframe class="explore-map" title="地圖" loading="lazy" referrerpolicy="no-referrer" src="' + escape(googleExploreEmbedUrl) + '"></iframe>';
+}
+
+async function mealCovers(owner, activePage, first, end) {
+  const rows = [];
+  const batch = 100;
+  for (let start = 0; ; start += batch) {
+    let query = client.from('meals').select(coverFields).gte('eaten_on', first).lte('eaten_on', end);
+    query = activePage === 'feed' ? query.neq('owner', owner) : query.eq('owner', owner);
+    const chunk = checked(await query.order('eaten_on', { ascending: false })
+      .order('eaten_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
+      .order('id').range(start, start + batch - 1));
+    rows.push(...chunk);
+    if (chunk.length < batch) return [...new Map(rows.map(meal => [meal.id, meal])).values()];
+  }
 }
 
 function render(focus = false) {
@@ -187,16 +251,16 @@ async function refresh() {
   if (activePage === 'friends' || activePage === 'feed') {
     const [rows, meals] = await Promise.all([
       client.from('friend_requests').select('*,sender_info:diners!friend_requests_sender_fkey(*),recipient_info:diners!friend_requests_recipient_fkey(*)'),
-      activePage === 'feed' ? client.rpc('recent_friend_meals', { first_day: shiftDay(localDate(), -6), last_day: localDate() }) : Promise.resolve({ data: [] }),
+      activePage === 'feed' ? mealCovers(owner, 'feed', shiftDay(localDate(), -6), localDate()) : [],
     ]);
     if (updating !== turn) return;
     friends = checked(rows).map(row => ({ ...row, other: row.sender === owner ? row.recipient_info : row.sender_info }));
-    if (activePage === 'feed') feed = checked(meals);
+    if (activePage === 'feed') feed = meals;
   }
   if (activePage === 'profile') {
     const { first, next } = monthDates(month);
-    const result = await client.from('meals').select('*').eq('owner', owner).gte('eaten_on', first).lt('eaten_on', next);
-    if (updating === turn) personal = checked(result);
+    const result = await mealCovers(owner, 'profile', first, shiftDay(next, -1));
+    if (updating === turn) personal = result;
   }
   return updating === turn && ['feed', 'friends', 'profile'].includes(activePage);
 }
@@ -232,6 +296,9 @@ async function initialize(nextSession) {
   personal = [];
   found = undefined;
   draft = {};
+  if (photoSheet.open) photoSheet.close();
+  if (detail.open) detail.close();
+  detailBody.replaceChildren();
   if (session) {
     const profile = await client.from('diners').select('*').eq('id', session.user.id).maybeSingle();
     if (turn !== authenticating) return;
@@ -243,33 +310,168 @@ async function initialize(nextSession) {
   render();
 }
 
-async function jpeg(file) {
-  if (file.size > 30 * 1024 * 1024) throw Error('請選擇小於 30 MB 的照片。');
-  const image = await createImageBitmap(file).catch(() => { throw Error('這張照片無法讀取，請改選 JPG 或 PNG。'); });
-  try {
-    const canvas = document.createElement('canvas');
-    for (const size of [1000, 720, 480]) {
-      const scale = Math.min(1, size / Math.max(image.width, image.height));
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const ctx = canvas.getContext('2d', { alpha: false });
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const encoded = canvas.toDataURL('image/jpeg', .82);
-      if (encoded.length <= photoLimit && encoded.startsWith('data:image/jpeg;base64,')) return encoded;
-    }
-    throw Error('這張照片太大，請選另一張。');
-  } finally {
-    image.close();
+function paintRecordPhotos(revealNewest = false) {
+  const photos = draft.photos || [];
+  pickerPhotos.innerHTML = pickerTiles();
+  pickerPhotos.hidden = photos.length === 0;
+  pickerEmpty.hidden = photos.length > 0;
+  if (revealNewest) pickerPhotos.scrollLeft = pickerPhotos.scrollWidth;
+  const count = photoSheet.querySelector('[data-photo-count]');
+  count.textContent = `${photos.length} / ${mealPhotoLimit}`;
+  count.hidden = photos.length === 0;
+  pickerNext.disabled = !photos.length || !!draft.reading || saving;
+  for (const button of photoSheet.querySelectorAll('[data-select-photo]')) button.disabled = !!draft.reading || photos.length >= mealPhotoLimit;
+  for (const button of photoSheet.querySelectorAll('[data-drop-photo], [data-pick-cover]')) button.disabled = !!draft.reading;
+  const form = view.querySelector('[data-record]');
+  if (!form) return;
+  form.querySelector('[data-record-photos]').innerHTML = recordPhotoSummary();
+  form.querySelector('[type="submit"]').disabled = !diner || !photos.length || !!draft.reading || saving;
+}
+
+function pickerNotice(message = '', error = false) {
+  pickerStatus.textContent = message;
+  pickerStatus.hidden = !message;
+  pickerStatus.classList.toggle('error', error);
+}
+
+function goToPage(next) {
+  page = next;
+  notice();
+  render(true);
+  window.scrollTo(0, 0);
+  void action(async () => { if (await refresh()) render(true); }, '載入失敗，請稍後再試。');
+}
+
+function openPhotoSheet(editing = false) {
+  if (saving || photoSheet.open || !view.querySelector('[data-record]')) return;
+  editingPhotos = editing;
+  pickerNext.textContent = editing ? '完成' : '下一步';
+  pickerNotice(draft.reading ? '照片處理中…' : '');
+  paintRecordPhotos();
+  photoSheet.showModal();
+  photoSheet.scrollTop = 0;
+  photoSheet.querySelector('[data-select-photo="photo"]:enabled')?.focus({ preventScroll: true });
+}
+
+function finishPhotoSheet() {
+  if (!photoSheet.open || pickerNext.disabled) return;
+  const form = view.querySelector('[data-record]');
+  photoSheet.close();
+  if (!form) return;
+  const focus = editingPhotos ? form.querySelector('[data-edit-photos]') : form.elements.restaurant;
+  focus.focus({ preventScroll: true });
+  if (!reducedMotion.matches) form.animate([
+    { opacity: .32, transform: 'translateY(24px)' }, { opacity: 1, transform: 'translateY(0)' },
+  ], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
+}
+
+function discardRecord() {
+  if (saving) return false;
+  const hasContent = draft.reading || draft.photos?.length || draft.restaurant?.trim() || draft.caption?.trim();
+  if (hasContent && !confirm('捨棄這餐的草稿？')) return false;
+  draft = {};
+  if (photoSheet.open) photoSheet.close();
+  return true;
+}
+
+function changeCover(index) {
+  const photos = draft.photos;
+  if (!index || !photos?.[index] || draft.reading) return;
+  const start = reducedMotion.matches ? [] : [...pickerPhotos.children].map(tile => tile.getBoundingClientRect().left);
+  photos.unshift(photos.splice(index, 1)[0]);
+  paintRecordPhotos();
+  pickerPhotos.scrollLeft = 0;
+  for (const [newIndex, tile] of [...pickerPhotos.children].entries()) {
+    if (!start.length) break;
+    const oldIndex = newIndex === 0 ? index : newIndex <= index ? newIndex - 1 : newIndex;
+    const shift = start[oldIndex] - tile.getBoundingClientRect().left;
+    if (Math.abs(shift) > 1) tile.animate([
+      { transform: `translateX(${shift}px) scale(.96)` }, { transform: 'translateX(0) scale(1)' },
+    ], { duration: 390, easing: 'cubic-bezier(.18,.88,.22,1)' });
   }
+  pickerPhotos.querySelector('[data-pick-cover="0"]').focus({ preventScroll: true });
+  pickerNotice();
+}
+
+function galleryImages(meal, photos, offset = 0) {
+  return photos.map((src, index) => `<figure>${photo({ ...meal, photo: src }, `餐照 ${offset + index + 1}`, 'detail-photo', index > 0 || offset > 0)}</figure>`).join('');
+}
+
+function showGalleryCount(track) {
+  const total = track.children.length;
+  const index = Math.max(0, Math.min(total - 1, Math.round(track.scrollLeft / track.clientWidth) || 0));
+  const controls = track.nextElementSibling;
+  controls.hidden = total < 2;
+  const caption = `${index + 1} / ${total}`;
+  if (controls.querySelector('output').textContent !== caption) controls.querySelector('output').textContent = caption;
+  controls.querySelector('[data-slide="-1"]').disabled = index === 0;
+  controls.querySelector('[data-slide="1"]').disabled = index === total - 1;
 }
 
 function mealDetails(meal) {
-  const remove = diner?.id === meal.owner ? '<button type="button" data-delete-meal="' + meal.id + '">刪除紀錄</button>' : '';
-  return '<article>' + photo(meal, meal.restaurant + '的餐照', 'detail-photo') + '<h3>' + escape(meal.restaurant) + '</h3>'
-    + '<small>' + escape(nameFor(meal.owner)) + ' · ' + escape(meal.eaten_on) + '</small>'
-    + (meal.caption ? '<p>' + escape(meal.caption) + '</p>' : '') + remove + '</article>';
+  const own = meal.owner === (diner?.id ?? '你');
+  const photos = [meal.photo, ...(meal.extra_photos || [])];
+  return `<article class="meal-story" data-meal-story="${escape(meal.id)}">
+    <div class="gallery-track" aria-label="這餐的照片">${galleryImages(meal, photos)}</div>
+    <div class="gallery-controls" ${photos.length > 1 ? '' : 'hidden'}>
+      <button type="button" data-slide="-1" aria-label="上一張">‹</button><output aria-live="polite"></output><button type="button" data-slide="1" aria-label="下一張">›</button>
+    </div>
+    <header class="meal-story-heading"><h3>${escape(meal.restaurant)}</h3><small>${escape(nameFor(meal.owner))} · ${escape(meal.eaten_on)}${meal.eaten_time ? ' · ' + escape(meal.eaten_time.slice(0, 5)) : ''}</small></header>
+    ${meal.caption ? `<p class="meal-caption">${escape(meal.caption)}</p>` : ''}
+    ${meal.place_id ? `<a class="meal-map" target="_blank" rel="noopener noreferrer" href="${escape(mapSearchLinks(meal.restaurant, meal.place_id).google)}">在 Google 地圖開啟 ↗</a>` : ''}
+    <div class="story-actions">
+      ${diner ? '<button type="button" data-like aria-pressed="false" disabled><span aria-hidden="true">♡</span> <span data-likes>按讚</span></button><button type="button" data-comment-focus>留言</button>' : ''}
+      ${own ? '<button type="button" data-share-meal>分享餐照</button>' : ''}
+    </div>
+    ${diner ? `<section class="story-comments" aria-label="留言">
+      <div data-comments></div>
+      <form class="comment-form" data-comment><input name="message" aria-label="寫留言" placeholder="留一句話…" maxlength="280" required><button type="submit">送出</button></form>
+    </section>` : ''}
+    <p class="story-feedback" role="status" data-story-status hidden></p>
+    ${own && diner ? `<button type="button" class="delete-meal" data-delete-meal="${escape(meal.id)}">刪除紀錄</button>` : ''}
+  </article>`;
+}
+
+function storyNotice(article, message) {
+  const status = article.querySelector('[data-story-status]');
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+async function refreshLikes(article) {
+  const id = article.dataset.mealStory;
+  const [total, mine] = await Promise.all([
+    client.from('meal_likes').select('meal_id', { count: 'exact', head: true }).eq('meal_id', id),
+    client.from('meal_likes').select('meal_id').eq('meal_id', id).eq('owner', diner.id).maybeSingle(),
+  ]);
+  checked(total);
+  const liked = !!checked(mine);
+  if (!article.isConnected) return;
+  const button = article.querySelector('[data-like]');
+  button.setAttribute('aria-pressed', String(liked));
+  button.firstElementChild.textContent = liked ? '♥' : '♡';
+  button.querySelector('[data-likes]').textContent = (liked ? '已按讚' : '按讚') + (total.count ? ` ${total.count}` : '');
+  button.disabled = false;
+}
+
+async function refreshComments(article, through) {
+  const query = client.from('meal_comments').select('id,owner,nickname,body,created_at')
+    .eq('meal_id', article.dataset.mealStory).order('created_at', { ascending: false }).order('id', { ascending: false });
+  const container = article.querySelector('[data-comments]');
+  const start = through || 0;
+  const request = String(Number(container.dataset.request || 0) + 1);
+  container.dataset.request = request;
+  const comments = checked(await query.range(start, start + 49));
+  if (!article.isConnected || container.dataset.request !== request) return;
+  const items = comments.reverse().map(comment => `<div class="story-comment">
+    <div><strong>${escape(comment.nickname)}</strong><p>${escape(comment.body)}</p></div>
+    ${comment.owner === diner.id ? `<button type="button" data-delete-comment="${escape(comment.id)}" aria-label="刪除這則留言">×</button>` : ''}
+  </div>`).join('');
+  const earlier = comments.length === 50 ? `<button type="button" data-older-comments="${start + 50}">看更早的留言</button>` : '';
+  if (start) {
+    container.querySelector('[data-older-comments]')?.remove();
+    container.insertAdjacentHTML('afterbegin', earlier + items);
+  } else container.innerHTML = earlier + items;
 }
 
 function openDetails(button) {
@@ -278,15 +480,167 @@ function openDetails(button) {
     ? groupMeals(source.filter(meal => meal.owner === (diner?.id ?? '你') && meal.eaten_on === button.dataset.day), 'eaten_on').get(button.dataset.day)
     : source.filter(meal => meal.id === button.dataset.meal);
   if (meals?.length) {
-    detailBody.innerHTML = '<h2 id="detail-title">' + escape(button.dataset.day || meals[0].restaurant) + '</h2>'
+    const origin = button.querySelector('img')?.getBoundingClientRect();
+    detailBody.innerHTML = '<h2 id="detail-title"' + (button.dataset.day ? '' : ' class="visually-hidden"') + '>' + escape(button.dataset.day || meals[0].restaurant) + '</h2>'
       + '<div class="day-meals">' + meals.map(mealDetails).join('') + '</div>';
     detail.showModal();
+    const target = detailBody.querySelector('.detail-photo');
+    if (origin && !button.dataset.day && !reducedMotion.matches) {
+      const end = target.getBoundingClientRect();
+      if (end.width && end.height) target.animate([
+        { transformOrigin: 'top left', transform: `translate(${origin.x - end.x}px, ${origin.y - end.y}px) scale(${origin.width / end.width}, ${origin.height / end.height})`, opacity: 0.45 },
+        { transformOrigin: 'top left', transform: 'none', opacity: 1 },
+      ], { duration: 430, easing: 'cubic-bezier(.2,.78,.24,1)' });
+    }
+    for (const [index, article] of [...detailBody.querySelectorAll('[data-meal-story]')].entries()) {
+      const track = article.querySelector('.gallery-track');
+      showGalleryCount(track);
+      if (!diner) continue;
+      const meal = meals[index];
+      void Promise.all([
+        client.from('meals').select('extra_photos').eq('id', meal.id).single().then(result => {
+          const photos = checked(result).extra_photos;
+          if (article.isConnected && photos.length) {
+            track.insertAdjacentHTML('beforeend', galleryImages(meal, photos, 1));
+            showGalleryCount(track);
+          }
+        }),
+        refreshLikes(article),
+        refreshComments(article),
+      ]).catch(() => { if (article.isConnected) storyNotice(article, '部分貼文內容載入失敗，請關閉後再試。'); });
+    }
   }
 }
 
 async function action(work, errorMessage) {
   try { await work(); } catch { notice(errorMessage, true); }
 }
+
+function paintChosenPlace(form) {
+  const box = form.querySelector('[data-chosen-place]');
+  box.hidden = !draft.place;
+  box.innerHTML = selectedPlace();
+}
+
+function clearRestaurantSuggestions(form) {
+  clearTimeout(suggestionTimer);
+  ++suggesting;
+  const results = form.querySelector('[data-restaurant-suggestions]');
+  results.hidden = true;
+  results.replaceChildren();
+  results.onclick = null;
+  form.querySelector('[data-restaurant-status]').textContent = '';
+}
+
+function queueRestaurantSuggestions(input, composing = false) {
+  const form = input.form;
+  clearRestaurantSuggestions(form);
+  const query = input.value.trim();
+  if (composing || !config.mapsKey || query.length < 2) return;
+  const request = suggesting;
+  const active = () => request === suggesting && input.isConnected && !saving && query === input.value.trim();
+  suggestionTimer = setTimeout(async () => {
+    if (!active()) return;
+    const results = form.querySelector('[data-restaurant-suggestions]');
+    const status = form.querySelector('[data-restaurant-status]');
+    try {
+      const places = await suggestPlaces(query, config.mapsKey);
+      if (!active()) return;
+      if (!places.length) {
+        results.innerHTML = '<p role="status">沒有符合的店家，可以直接用手填名稱。</p>';
+      } else {
+        results.innerHTML = `<div class="place-results" role="group" aria-label="店家建議">
+          ${places.map((place, index) => `<button type="button" data-choose-place="${index}"><strong>${escape(place.displayName)}</strong><small>${escape(place.formattedAddress)}</small></button>`).join('')}
+          <span class="map-attribution" translate="no">Google Maps</span>
+        </div>`;
+        results.onclick = event => {
+          const choice = event.target.closest('[data-choose-place]');
+          if (!choice || !active()) return;
+          draft.place = places[Number(choice.dataset.choosePlace)];
+          clearRestaurantSuggestions(form);
+          paintChosenPlace(form);
+          status.textContent = `已連結 ${draft.place.displayName}`;
+          input.focus();
+        };
+      }
+      results.hidden = false;
+      if (places.length) status.textContent = `有 ${places.length} 間店家建議。`;
+    } catch {
+      if (!active()) return;
+      results.innerHTML = '<p role="status">暫時無法取得店家建議，仍可手填店名。</p>';
+      results.hidden = false;
+    }
+  }, 350);
+}
+
+async function placeSearch(form, value, button) {
+  const query = value.trim();
+  if (!query) return notice('先輸入店名或地址。', true);
+  const results = form.querySelector('[data-place-results]');
+  const input = form.elements.query;
+  const active = () => form.isConnected && input.value.trim() === query && results.dataset.query === query;
+  results.dataset.query = query;
+  results.hidden = false;
+  results.innerHTML = '<p role="status">找店中…</p>';
+  button.disabled = true;
+  try {
+    const places = (await findPlaces(query, config.mapsKey)).filter(place => place.id && place.displayName);
+    if (!active()) return;
+    results.innerHTML = `<div class="place-results">
+      ${places.map(place => `<a target="_blank" rel="noopener noreferrer" href="${escape(mapSearchLinks(query, place.id).google)}"><strong>${escape(place.displayName)}</strong><small>${escape(place.formattedAddress)}</small></a>`).join('') || '<p>找不到符合的店家。試試店名加分店或地區。</p>'}
+      <span class="map-attribution" translate="no">Google Maps</span>
+    </div>`;
+  } catch {
+    if (!active()) return;
+    results.innerHTML = `<p role="status">目前無法在站內找店。 <a target="_blank" rel="noopener noreferrer" href="${escape(mapSearchLinks(query).google)}">改用 Google 地圖 ↗</a></p>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function storyAction(button, work) {
+  const story = button.closest('[data-meal-story]');
+  button.disabled = true;
+  storyNotice(story, '');
+  try { await work(story); } catch (error) { if (story.isConnected) storyNotice(story, error.message || '操作失敗，請稍後再試。'); }
+  finally { button.disabled = false; }
+}
+
+detail.addEventListener('scroll', event => {
+  if (event.target.matches?.('.gallery-track')) showGalleryCount(event.target);
+}, { capture: true, passive: true });
+
+view.addEventListener('scroll', event => {
+  const track = event.target;
+  if (!track.matches?.('.tile-grid')) return;
+  const arrows = track.previousElementSibling.querySelector('.feed-arrows');
+  if (!arrows) return;
+  arrows.firstElementChild.disabled = track.scrollLeft <= 2;
+  arrows.lastElementChild.disabled = track.scrollLeft >= track.scrollWidth - track.clientWidth - 2;
+}, { capture: true, passive: true });
+
+detail.addEventListener('close', () => {
+  if (!detail.open) detailBody.replaceChildren();
+});
+
+photoSheet.addEventListener('cancel', event => {
+  event.preventDefault();
+  if (discardRecord()) goToPage(recordReturn);
+});
+
+detail.addEventListener('submit', async event => {
+  const form = event.target;
+  if (!form.matches('[data-comment]')) return;
+  event.preventDefault();
+  const body = form.elements.message.value.trim();
+  if (!diner || !body || form.querySelector('button').disabled) return;
+  await storyAction(form.querySelector('button'), async article => {
+    const result = await client.from('meal_comments').insert({ meal_id: article.dataset.mealStory, body });
+    if (result.error) throw Error('留言未送出，請再試一次。');
+    form.reset();
+    await refreshComments(article);
+  });
+});
 
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
@@ -299,16 +653,76 @@ document.addEventListener('click', event => {
       option.setAttribute('aria-pressed', String(option.dataset.theme === data.theme));
     }
   } else if (pages.includes(data.page)) {
-    page = data.page;
-    notice();
-    render(true);
-    window.scrollTo(0, 0);
-    void action(async () => { if (await refresh()) render(true); }, '載入失敗，請稍後再試。');
+    if (data.page === 'record') {
+      if (page !== 'record') {
+        recordReturn = page;
+        goToPage('record');
+        openPhotoSheet();
+      } else openPhotoSheet(!!draft.photos?.length);
+    } else if (page !== 'record' || discardRecord()) goToPage(data.page);
+  } else if (data.closeRecord !== undefined) {
+    if (discardRecord()) goToPage(recordReturn);
+  } else if (data.editPhotos !== undefined) {
+    openPhotoSheet(!!draft.photos?.length);
+  } else if (data.finishPhotos !== undefined) {
+    finishPhotoSheet();
   } else if (data.refresh !== undefined) {
     notice();
     void action(async () => { if (await refresh()) render(true); }, '更新失敗，請稍後再試。');
+  } else if (data.shiftRow) {
+    const track = button.closest('.friend-row').querySelector('.tile-grid');
+    const step = track.children[1].offsetLeft - track.children[0].offsetLeft;
+    track.scrollBy({ left: Number(data.shiftRow) * step, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+  } else if (data.selectPhoto) {
+    if (!draft.reading && !saving) photoSheet.querySelector(`[name="${data.selectPhoto}"]`)?.click();
+  } else if (data.pickCover !== undefined) {
+    changeCover(Number(data.pickCover));
+  } else if (data.dropPhoto !== undefined) {
+    if (draft.reading || saving) return;
+    draft.photos.splice(Number(data.dropPhoto), 1);
+    paintRecordPhotos();
+    pickerNotice();
+    photoSheet.querySelector('[data-select-photo="photo"]').focus({ preventScroll: true });
+  } else if (data.savePhoto !== undefined) {
+    const file = draft.photos[Number(data.savePhoto)]?.original;
+    if (file) void sharePhoto(file).catch(() => pickerNotice('原圖無法儲存，請再試一次。', true));
+  } else if (data.clearPlace !== undefined) {
+    const form = button.form;
+    draft.place = undefined;
+    paintChosenPlace(form);
+    form.elements.restaurant.focus();
   } else if (data.meal || data.day) {
     openDetails(button);
+  } else if (data.slide) {
+    const track = button.parentElement.previousElementSibling;
+    const index = Math.round(track.scrollLeft / track.clientWidth) + Number(data.slide);
+    track.scrollTo({ left: index * track.clientWidth, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+  } else if (data.commentFocus !== undefined) {
+    button.closest('article').querySelector('[name="message"]').focus();
+  } else if (data.shareMeal !== undefined) {
+    void storyAction(button, async article => {
+      const img = article.querySelector('.detail-photo');
+      await sharePhoto(mealCard(img, article.querySelector('h3').textContent));
+    });
+  } else if (data.like !== undefined && diner) {
+    void storyAction(button, async article => {
+      const meal_id = article.dataset.mealStory;
+      const liked = button.getAttribute('aria-pressed') === 'true';
+      const result = liked ? await client.from('meal_likes').delete().eq('meal_id', meal_id).eq('owner', diner.id)
+        : await client.from('meal_likes').insert({ meal_id });
+      if (result.error && result.error.code !== '23505') throw Error('無法更新按讚，請再試一次。');
+      await refreshLikes(article);
+      if (!liked && !reducedMotion.matches && button.isConnected) {
+        button.firstElementChild.animate([{ transform: 'scale(.72)' }, { transform: 'scale(1.22)', offset: .65 }, { transform: 'scale(1)' }], { duration: 280 });
+      }
+    });
+  } else if (data.olderComments && diner) {
+    void storyAction(button, article => refreshComments(article, Number(data.olderComments)));
+  } else if (data.deleteComment && diner) {
+    void storyAction(button, async article => {
+      checked(await client.from('meal_comments').delete().eq('id', data.deleteComment).eq('owner', diner.id));
+      await refreshComments(article);
+    });
   } else if (data.month) {
     const date = new Date(month + '-01T12:00:00');
     date.setMonth(date.getMonth() + Number(data.month));
@@ -364,31 +778,81 @@ document.addEventListener('click', event => {
 
 view.addEventListener('input', event => {
   const input = event.target;
-  if (input.form?.matches('[data-record]') && input.type !== 'file') draft[input.name] = input.value;
+  const form = input.form;
+  if (form?.matches('[data-record]') && input.type !== 'file') {
+    draft[input.name] = input.value;
+    if (input.name === 'restaurant') {
+      if (draft.place) {
+        draft.place = undefined;
+        paintChosenPlace(form);
+      }
+      queueRestaurantSuggestions(input, event.isComposing);
+    }
+  }
+  if (input.name === 'query') {
+    const results = form.querySelector('[data-place-results]');
+    results.hidden = true;
+    delete results.dataset.query;
+  }
   if (input.form?.matches('[data-find]')) searchCode = input.value;
 });
 
-view.addEventListener('change', async event => {
+view.addEventListener('compositionstart', event => {
+  if (event.target.name === 'restaurant') clearRestaurantSuggestions(event.target.form);
+});
+
+view.addEventListener('compositionend', event => {
+  if (event.target.name === 'restaurant') queueRestaurantSuggestions(event.target);
+});
+
+view.addEventListener('focusout', event => {
+  const field = event.target.closest('.restaurant-field');
+  if (field && event.relatedTarget && !field.contains(event.relatedTarget)) {
+    clearRestaurantSuggestions(field.closest('form'));
+  }
+});
+
+view.addEventListener('keydown', event => {
+  const target = event.target;
+  if (event.isComposing || (target.name !== 'restaurant' && !target.matches('[data-choose-place]'))) return;
+  const form = target.form;
+  const input = form.elements.restaurant;
+  if (event.key === 'Escape') {
+    clearRestaurantSuggestions(form);
+    input.focus();
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const options = [...form.querySelectorAll('[data-choose-place]')];
+    if (!options.length) return;
+    const current = options.indexOf(target);
+    const next = event.key === 'ArrowDown' ? options[current + 1] : (current < 0 ? options.at(-1) : options[current - 1] || input);
+    event.preventDefault();
+    next?.focus();
+  }
+});
+
+photoSheet.addEventListener('change', async event => {
   const input = event.target;
-  const file = input.type === 'file' && input.files[0];
-  if (!file) return;
+  if (input.type !== 'file' || !input.files.length || draft.reading || saving) return;
+  const files = [...input.files];
+  input.value = '';
   const current = draft;
-  const form = input.form;
-  if (form.dataset.reading) return;
-  form.dataset.reading = 'true';
-  const submit = form.querySelector('button[type="submit"]');
-  submit.disabled = true;
+  const photos = draft.photos ||= [];
+  const remaining = mealPhotoLimit - photos.length;
+  if (!remaining) return pickerNotice(`每餐最多 ${mealPhotoLimit} 張，先移除一張再加。`, true);
+  const errors = [];
+  draft.reading = true;
+  pickerNotice('照片處理中…');
+  paintRecordPhotos();
   try {
-    const picture = await jpeg(file);
-    if (current !== draft) return;
-    draft.photo = picture;
-    form.querySelector('[data-preview]').innerHTML = '<img class="draft-photo" src="' + picture + '" alt="待發布的餐照">';
-    notice();
-  } catch (error) {
-    notice(error.message, true);
+    for (const file of files.slice(0, remaining)) {
+      try { photos.push(await preparePhoto(file, input.name === 'camera')); }
+      catch (error) { errors.push(error.message); }
+      if (current !== draft) return;
+    }
+    if (photoSheet.open) pickerNotice(errors[0] || (files.length > remaining ? `每餐最多 ${mealPhotoLimit} 張，已加入前 ${remaining} 張。` : ''), !!errors.length);
   } finally {
-    delete form.dataset.reading;
-    submit.disabled = !diner;
+    delete current.reading;
+    if (current === draft) paintRecordPhotos(true);
   }
 });
 
@@ -398,13 +862,15 @@ view.addEventListener('submit', async event => {
   const values = new FormData(form);
   notice();
   if (form.matches('[data-explore]')) {
-    await action(() => window.open(mapSearchLinks(values.get('query')).google, '_blank', 'noopener,noreferrer'), '請輸入要查找的店名或地址。');
+    if (config.mapsKey) await placeSearch(form, values.get('query'), event.submitter || form.querySelector('button'));
+    else await action(() => window.open(mapSearchLinks(values.get('query')).google, '_blank', 'noopener,noreferrer'), '請輸入要查找的店名或地址。');
     return;
   }
-  if (!session || saving) return;
+  if (!session || saving || (form.matches('[data-record]') && draft.reading)) return;
   const submit = event.submitter ?? form.querySelector('button[type="submit"]');
   saving = true;
   submit.disabled = true;
+  if (form.matches('[data-record]')) form.inert = true;
   try {
     if (form.matches('[data-profile]')) {
       const nickname = values.get('nickname').trim();
@@ -416,14 +882,21 @@ view.addEventListener('submit', async event => {
     } else if (form.matches('[data-find]')) {
       await find(values.get('code'));
     } else if (form.matches('[data-record]')) {
+      const submitted = draft;
+      const owner = diner.id;
       const restaurant = values.get('restaurant').trim();
-      if (!draft.photo || !restaurant) return notice('請先選一張餐照並輸入店名。', true);
-      const eaten_on = values.get('eaten_on');
-      const nextMeal = { id: draft.id ??= crypto.randomUUID(), eaten_on, restaurant, caption: values.get('caption').trim(), photo: draft.photo };
+      const date = mealDateFromPhotos(draft.photos);
+      if (!date || !restaurant) return notice('請先加入餐照並輸入店名。', true);
+      const eaten_on = date.day;
+      const [photo, ...extra_photos] = draft.photos.map(item => item.src);
+      const nextMeal = { id: draft.id ??= crypto.randomUUID(), eaten_on, eaten_time: date.time,
+        restaurant, place_id: draft.place?.id || null, caption: values.get('caption').trim(), photo, extra_photos };
       const result = await client.from('meals').insert(nextMeal);
+      if (submitted !== draft) return;
       if (result.error?.code === '23505') {
-        checked(await client.from('meals').select('id').eq('id', nextMeal.id).eq('owner', diner.id).single());
+        checked(await client.from('meals').select('id').eq('id', nextMeal.id).eq('owner', owner).single());
       } else checked(result);
+      if (submitted !== draft) return;
       draft = {};
       page = 'profile';
       month = eaten_on.slice(0, 7);
@@ -435,6 +908,7 @@ view.addEventListener('submit', async event => {
     notice('這次操作未能完成，請稍後再試。', true);
   } finally {
     saving = false;
+    view.querySelector('[data-record]')?.removeAttribute('inert');
     submit.disabled = false;
   }
 });

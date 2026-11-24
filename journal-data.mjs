@@ -22,12 +22,28 @@ export function monthDates(month) {
 export function groupMeals(meals, key, limit = Infinity) {
   const groups = new Map();
   const sorted = [...meals].sort((a, b) =>
-    b.eaten_on.localeCompare(a.eaten_on) || b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
+    b.eaten_on.localeCompare(a.eaten_on) || (b.eaten_time || '').localeCompare(a.eaten_time || '')
+    || b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   for (const meal of sorted) {
     if (!groups.has(meal[key])) groups.set(meal[key], []);
     if (groups.get(meal[key]).length < limit) groups.get(meal[key]).push(meal);
   }
   return groups;
+}
+
+export const mealPhotoLimit = 6;
+
+export function mealDateFromPhotos(photos, now = new Date()) {
+  const cover = photos?.[0];
+  if (!cover) return null;
+  const stamp = /^(\d{4}-\d{2}-\d{2})T((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)$/.exec(cover.takenAt);
+  if (stamp && localDate(new Date(stamp[1] + 'T12:00:00')) === stamp[1]) {
+    return { day: stamp[1], time: stamp[2], source: 'photo' };
+  }
+  const modified = new Date(cover.modifiedAt);
+  const hasFileTime = cover.modifiedAt > 0 && !Number.isNaN(modified.getTime());
+  const date = hasFileTime ? modified : new Date(cover.addedAt ?? now);
+  return { day: localDate(date), time: date.toTimeString().slice(0, 8), source: hasFileTime ? 'file' : 'added' };
 }
 
 const examples = [
@@ -44,7 +60,7 @@ const examples = [
 ];
 
 export function sampleMeals(today = localDate()) {
-  return examples.map(([owner, restaurant, caption], index) => ({
+  const meals = examples.map(([owner, restaurant, caption], index) => ({
     id: 'sample-' + (index + 1),
     owner,
     restaurant,
@@ -53,4 +69,8 @@ export function sampleMeals(today = localDate()) {
     eaten_on: shiftDay(today, index < 8 ? -Math.floor(index / 2) : 0),
     created_at: index % 2 ? '12:00' : '18:00',
   }));
+  meals[0].extra_photos = ['./meal-photos/3.jpg'];
+  meals.push({ ...meals[0], id: 'sample-11', restaurant: '肉燥飯和湯', photo: './meal-photos/10.jpg',
+    extra_photos: [], eaten_on: shiftDay(today, -1), created_at: '08:00', caption: '早餐吃碗熱湯。' });
+  return meals;
 }

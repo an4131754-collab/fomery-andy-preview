@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="referrer" content="no-referrer">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Fomery · 餐桌筆記</title>
   <script>
     try {
       if (localStorage.getItem('fomery-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
     } catch {}
   </script>
-  <link rel="stylesheet" href="journal.css?v=appearance-1">
-  <script type="module" src="journal.mjs?v=appearance-1"></script>
+  <link rel="stylesheet" href="journal.css?v=photo-picker-1">
+  <script type="module" src="journal.mjs?v=photo-picker-1"></script>
 </head>
 <body>
   <header class="shell masthead">
@@ -32,6 +32,25 @@
     <button type="button" data-page="explore"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9c0 5-7 11-7 11S5 14 5 9a7 7 0 0 1 14 0Z"/><circle cx="12" cy="9" r="2"/></svg><span>探索</span></button>
     <button type="button" data-page="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span>個人</span></button>
   </nav>
+  <dialog id="photo-sheet" aria-labelledby="photo-sheet-title">
+    <section class="photo-sheet-frame">
+      <header class="photo-sheet-header">
+        <button type="button" data-close-record aria-label="關閉選照">×</button>
+        <h2 id="photo-sheet-title">新增您的用餐照片</h2>
+        <button type="button" class="primary" data-finish-photos disabled>下一步</button>
+      </header>
+      <div class="photo-sheet-empty" aria-hidden="true"></div>
+      <div class="photo-strip" data-picker-photos aria-label="已選餐照" hidden></div>
+      <div class="photo-sheet-actions">
+        <input type="file" accept="image/*" name="photo" multiple hidden>
+        <input type="file" accept="image/*" name="camera" capture="environment" hidden>
+        <button type="button" data-select-photo="photo">從相簿選</button>
+        <button type="button" data-select-photo="camera">拍照 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h4l2-3h6l2 3h4v14H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <small data-photo-count hidden></small>
+      </div>
+      <p data-picker-status role="status" hidden></p>
+    </section>
+  </dialog>
   <dialog id="meal-detail" aria-labelledby="detail-title">
     <form method="dialog"><button type="submit" aria-label="關閉">關閉</button></form>
     <div id="detail-body"></div>
