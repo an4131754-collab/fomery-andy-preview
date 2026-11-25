@@ -10,12 +10,16 @@
       if (localStorage.getItem('fomery-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
     } catch {}
   </script>
-  <link rel="stylesheet" href="journal.css?v=photo-picker-1">
-  <script type="module" src="journal.mjs?v=photo-picker-1"></script>
+  <link rel="stylesheet" href="journal.css?v=friends-feed-2">
+  <script type="module" src="journal.mjs?v=friends-feed-2"></script>
 </head>
 <body>
   <header class="shell masthead">
-    <h1>餐桌筆記<span class="brand-dot">.</span></h1>
+    <h1 aria-label="Fomery">
+      <svg class="wordmark" width="112" height="36" viewBox="0 -42.86 568 182.86" aria-hidden="true">
+        <use href="fomery-wordmark.svg#wordmark"/>
+      </svg>
+    </h1>
     <button type="button" class="account" id="login" hidden>Google 登入</button>
   </header>
   <main class="shell" id="main">
@@ -39,12 +43,11 @@
         <h2 id="photo-sheet-title">新增您的用餐照片</h2>
         <button type="button" class="primary" data-finish-photos disabled>下一步</button>
       </header>
-      <div class="photo-sheet-empty" aria-hidden="true"></div>
       <div class="photo-strip" data-picker-photos aria-label="已選餐照" hidden></div>
       <div class="photo-sheet-actions">
         <input type="file" accept="image/*" name="photo" multiple hidden>
         <input type="file" accept="image/*" name="camera" capture="environment" hidden>
-        <button type="button" data-select-photo="photo">從相簿選</button>
+        <button type="button" data-select-photo="photo"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-5 5 6"/></svg>從相簿選</button>
         <button type="button" data-select-photo="camera">拍照 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h4l2-3h6l2 3h4v14H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
         <small data-photo-count hidden></small>
       </div>
@@ -52,7 +55,14 @@
     </section>
   </dialog>
   <dialog id="meal-detail" aria-labelledby="detail-title">
-    <form method="dialog"><button type="submit" aria-label="關閉">關閉</button></form>
+    <form class="detail-bar" method="dialog">
+      <output data-reader-remaining aria-live="polite" hidden></output>
+      <div class="reader-navigation" data-reader-navigation hidden>
+        <button type="button" data-reader-step="-1" aria-label="上一餐">‹</button>
+        <button type="button" data-reader-step="1" aria-label="下一餐">›</button>
+      </div>
+      <button type="submit" aria-label="關閉" autofocus><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </form>
     <div id="detail-body"></div>
   </dialog>
 </body>

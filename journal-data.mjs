@@ -70,6 +70,8 @@ export function sampleMeals(today = localDate()) {
     created_at: index % 2 ? '12:00' : '18:00',
   }));
   meals[0].extra_photos = ['./meal-photos/3.jpg'];
+  meals[6].photo = './meal-photos/curry-portrait.jpg';
+  meals[6].extra_photos = ['./meal-photos/7.jpg'];
   meals.push({ ...meals[0], id: 'sample-11', restaurant: '肉燥飯和湯', photo: './meal-photos/10.jpg',
     extra_photos: [], eaten_on: shiftDay(today, -1), created_at: '08:00', caption: '早餐吃碗熱湯。' });
   return meals;

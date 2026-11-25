@@ -59,24 +59,43 @@ export async function sharePhoto(file) {
   setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
 }
 
+export function photoEdgeTint(image) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 8;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return 'var(--surface)';
+  ctx.drawImage(image, 0, 0, 8, 8);
+  const pixels = ctx.getImageData(0, 0, 8, 8).data;
+  const channels = [0, 0, 0];
+  for (let index = 0; index < 64; index++) {
+    if (index >= 8 && index < 56 && index % 8 !== 0 && index % 8 !== 7) continue;
+    for (let channel = 0; channel < 3; channel++) channels[channel] += pixels[index * 4 + channel];
+  }
+  return `rgb(${channels.map(value => Math.round(value / 28)).join(' ')})`;
+}
+
 export function mealCard(image, restaurant) {
   if (!image?.naturalWidth) throw Error('請等封面載入後再分享。');
+  const width = 952;
+  const height = Math.round(Math.max(192, Math.min(1693, width * image.naturalHeight / image.naturalWidth)));
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
   const canvas = document.createElement('canvas');
   canvas.width = 1080;
-  canvas.height = 1140;
+  canvas.height = height + 188;
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.fillStyle = '#f7f2e9';
-  ctx.fillRect(0, 0, 1080, 1140);
-  const size = Math.min(image.naturalWidth, image.naturalHeight);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.beginPath();
-  ctx.roundRect(64, 64, 952, 952, 24);
+  ctx.roundRect(64, 64, width, height, 24);
   ctx.save();
   ctx.clip();
-  ctx.drawImage(image, (image.naturalWidth - size) / 2, (image.naturalHeight - size) / 2, size, size, 64, 64, 952, 952);
+  ctx.drawImage(image, 64 + (width - drawWidth) / 2, 64 + (height - drawHeight) / 2, drawWidth, drawHeight);
   ctx.restore();
-  ctx.fillStyle = '#173c44';
-  ctx.font = '600 48px Georgia, "Noto Serif TC", serif';
-  ctx.fillText(restaurant, 64, 1095, 952);
+  ctx.fillStyle = '#211d1c';
+  ctx.font = '600 48px system-ui, "Noto Sans TC", sans-serif';
+  ctx.fillText(restaurant, 64, height + 143, width);
   const encoded = canvas.toDataURL('image/jpeg', .92).split(',')[1];
   return new File([Uint8Array.from(atob(encoded), byte => byte.charCodeAt(0))], 'Fomery-餐照.jpg', { type: 'image/jpeg' });
 }
