@@ -10,8 +10,8 @@
       if (localStorage.getItem('fomery-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
     } catch {}
   </script>
-  <link rel="stylesheet" href="journal.css?v=friends-feed-2">
-  <script type="module" src="journal.mjs?v=friends-feed-2"></script>
+  <link rel="stylesheet" href="journal.css?v=friends-feed-3">
+  <script type="module" src="journal.mjs?v=friends-feed-3"></script>
 </head>
 <body>
   <header class="shell masthead">
@@ -55,13 +55,13 @@
     </section>
   </dialog>
   <dialog id="meal-detail" aria-labelledby="detail-title">
-    <form class="detail-bar" method="dialog">
+    <form class="detail-bar" method="dialog" tabindex="-1" autofocus>
       <output data-reader-remaining aria-live="polite" hidden></output>
       <div class="reader-navigation" data-reader-navigation hidden>
         <button type="button" data-reader-step="-1" aria-label="上一餐">‹</button>
         <button type="button" data-reader-step="1" aria-label="下一餐">›</button>
       </div>
-      <button type="submit" aria-label="關閉" autofocus><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <button type="submit" aria-label="關閉"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </form>
     <div id="detail-body"></div>
   </dialog>

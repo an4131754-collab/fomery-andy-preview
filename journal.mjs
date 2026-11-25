@@ -1,7 +1,7 @@
 import { findPlaces, googleExploreEmbedUrl, mapSearchLinks, suggestPlaces } from './maps.mjs?v=record-2';
 import { groupMeals, localDate, mealDateFromPhotos, mealPhotoLimit, monthDates, sampleMeals, shiftDay } from './journal-data.mjs?v=friends-feed-1';
 import { mealCard, photoEdgeTint, preparePhoto, sharePhoto } from './journal-media.mjs?v=friends-feed-1';
-import { mealReader } from './meal-reader.mjs?v=friends-feed-1';
+import { mealReader } from './meal-reader.mjs?v=friends-feed-2';
 import { qrcode } from './vendor/qrcode.mjs';
 
 const view = document.querySelector('#view');
@@ -402,9 +402,10 @@ function galleryImages(meal, photos, offset = 0) {
 function fitGalleryPhoto(image) {
   const frame = image.closest('figure');
   if (!image.naturalWidth || frame.dataset.ratio) return;
-  const portrait = image.naturalHeight > image.naturalWidth;
-  frame.dataset.ratio = portrait ? '9 / 16' : '4 / 5';
-  frame.toggleAttribute('data-portrait', portrait);
+  const ratio = image.naturalWidth / image.naturalHeight;
+  frame.dataset.ratio = ratio <= 1 ? ratio : 4 / 5;
+  frame.toggleAttribute('data-portrait', ratio <= 1);
+  frame.style.setProperty('--frame-ratio', frame.dataset.ratio);
   frame.style.setProperty('--photo-edge', photoEdgeTint(image));
 }
 
@@ -414,13 +415,18 @@ function showGalleryCount(track) {
   const controls = track.nextElementSibling;
   controls.hidden = total < 2;
   const caption = `${index + 1} / ${total}`;
-  if (controls.querySelector('output').textContent !== caption) controls.querySelector('output').textContent = caption;
-  controls.querySelector('[data-slide="-1"]').disabled = index === 0;
-  controls.querySelector('[data-slide="1"]').disabled = index === total - 1;
-  if (!track.closest('.reader-page')) return;
+  const counter = controls.querySelector('output');
+  if (counter.textContent !== caption) counter.textContent = caption;
+  if (!track.closest('.reader-page')) {
+    controls.querySelector('[data-slide="-1"]').disabled = index === 0;
+    controls.querySelector('[data-slide="1"]').disabled = index === total - 1;
+    return;
+  }
+  track.tabIndex = total > 1 ? 0 : -1;
   const frame = track.children[index];
   fitGalleryPhoto(frame.querySelector('img'));
-  if (frame.dataset.ratio) track.style.setProperty('--frame-ratio', frame.dataset.ratio);
+  if (!frame.dataset.ratio) return;
+  track.style.setProperty('--frame-ratio', frame.dataset.ratio);
   track.toggleAttribute('data-portrait', frame.hasAttribute('data-portrait'));
 }
 
@@ -446,11 +452,15 @@ function mealDetails(meal, immersive = false) {
     <input name="message" aria-label="寫留言" placeholder="留言" maxlength="280" value="${escape(commentDrafts.get(meal.id))}" required ${diner ? '' : 'disabled'}>
     <button type="submit" aria-label="送出留言" ${diner ? '' : 'disabled'}>${storyIcon('send')}</button>
   </form>` : '';
+  const photoCount = `<output aria-live="polite">1 / ${photos.length}</output>`;
   return `<article class="meal-story" data-meal-story="${escape(meal.id)}"><div class="story-content">
     <div class="story-gallery">
-    <div class="gallery-track" aria-label="這餐的照片">${galleryImages(meal, photos)}</div>
+    <div class="gallery-track" role="region" aria-label="這餐的照片">${galleryImages(meal, photos)}</div>
     <div class="gallery-controls" ${photos.length > 1 ? '' : 'hidden'}>
-      <button type="button" data-slide="-1" aria-label="上一張">‹</button><output aria-live="polite">1 / ${photos.length}</output><button type="button" data-slide="1" aria-label="下一張">›</button>
+      ${immersive ? photoCount : `
+        <button type="button" data-slide="-1" aria-label="上一張">‹</button>
+        ${photoCount}
+        <button type="button" data-slide="1" aria-label="下一張">›</button>`}
     </div>
     </div>
     <div class="story-meta">
@@ -726,6 +736,9 @@ detail.addEventListener('submit', async event => {
   });
 });
 
+document.addEventListener('pointerdown', () => document.documentElement.toggleAttribute('data-pointer-input', true), { capture: true, passive: true });
+document.addEventListener('keydown', () => document.documentElement.removeAttribute('data-pointer-input'), true);
+
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
@@ -751,8 +764,20 @@ document.addEventListener('click', event => {
   } else if (data.finishPhotos !== undefined) {
     finishPhotoSheet();
   } else if (data.refresh !== undefined) {
+    if (button.ariaBusy === 'true') return;
+    button.ariaBusy = 'true';
     notice();
-    void action(async () => { if (await refresh()) render(true); }, '更新失敗，請稍後再試。');
+    void action(async () => {
+      try {
+        if (await refresh()) {
+          const keepFocus = document.activeElement === button;
+          render();
+          if (keepFocus) view.querySelector('[data-refresh]')?.focus({ preventScroll: true });
+        }
+      } finally {
+        button.removeAttribute('aria-busy');
+      }
+    }, '更新失敗，請稍後再試。');
   } else if (data.shiftRow) {
     const track = button.closest('.friend-row').querySelector('.tile-grid');
     const step = track.children[1].offsetLeft - track.children[0].offsetLeft;

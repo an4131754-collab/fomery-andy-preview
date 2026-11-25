@@ -5,7 +5,6 @@ export function mealReader(dialog, body, { render, activate, reducedMotion }) {
   const bar = dialog.querySelector('.detail-bar');
   const counter = bar.querySelector('[data-reader-remaining]');
   const navigation = bar.querySelector('[data-reader-navigation]');
-  const closeButton = bar.querySelector('[type="submit"]');
   let state;
   let pull;
 
@@ -110,6 +109,7 @@ export function mealReader(dialog, body, { render, activate, reducedMotion }) {
     body.replaceChildren(heading, track);
     show(state);
     dialog.showModal();
+    bar.focus({ preventScroll: true });
     const current = state;
     const cover = current.panels.get(index);
     void cover.ready.then(() => {
@@ -137,7 +137,7 @@ export function mealReader(dialog, body, { render, activate, reducedMotion }) {
     if (state !== current || !dialog.open) return;
     if (next) {
       current.index += step;
-      if (current.track.contains(document.activeElement)) closeButton.focus({ preventScroll: true });
+      if (current.track.contains(document.activeElement)) bar.focus({ preventScroll: true });
       show(current);
     } else current.track.style.transform = '';
     current.busy = false;
